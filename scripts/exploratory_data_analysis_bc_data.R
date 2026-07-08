@@ -2,10 +2,12 @@
 #      EXPLORATORY DATA ANALYSIS       #
 ########################################
 
+
+#Packages needed for EDA:
 library(see)
 library(gt)
-library(ggrepel)
-library(lattice)
+library(corrplot)
+library(rstatix)
 
 
 
@@ -23,9 +25,9 @@ glimpse(bc_analysis_df)
 ## - are there any common categories
 ## - how are different categories distributed?
 
-#----------------------------------------
+#########################################
 #           SUMMARY STATISTICS          #
-#----------------------------------------
+#########################################
 
 # categorical variable: counts
 cat_vars <- c(
@@ -212,6 +214,20 @@ ggplot(bc_sample, aes(Treatment_Round,Tumor_Shrinkage_Pct, group = Patient_ID))+
     title = "Relationship between Tumor Shrinkage and Treatment Round"
   )
 
+# CA15_3_Levels >30 vs CA15_3_Levels <= 30
+
+bc_ca15 <- bc_analysis_df %>%
+  group_by(Patient_ID) %>%
+  mutate(
+    ca15_grp = if_else(CA15_3_Level <= 30,"<=30", ">30")
+  )%>%
+  select(Patient_ID, Treatment_Round, CA15_3_Level,ca15_grp) %>% 
+  ungroup()
+
+ggplot(bc_ca15, aes(Treatment_Round, CA15_3_Level, group = Patient_ID))+
+  geom_line(alpha = 0.3)+
+  geom_point(aes(color = Treatment_Round))+
+  facet_wrap(~ca15_grp)
 
 # Violin Plot 
 
@@ -280,5 +296,53 @@ overall_mean <- mean_comp %>%
     outliers_mean, by = "Treatment_Round"
   )
 
+
+###################################
+#     CORRELATION MATRIX          #
+###################################
+
+#numerical variables
+
+num_vars <- bc_analysis_df %>%
+  select(
+    CA15_3_Level,
+    Tumor_Shrinkage_Pct,
+    Age_at_Diagnosis,
+    Initial_Tumor_Size_mm
+  )
+
+cor_mat <- cor(
+  num_vars,
+  use = "complete.obs"
+)
+
+corrplot(
+  cor_mat,
+  method = "color",
+  type = "upper",
+  addCoef.col = "black"
+)
+
+
+# categorical variables 
+
+cat_table <- function(df, var1, var2){
+  
+  assoc_tab <- table(df[[var1]], df[[var2]])
+  
+  chi <- chisq.test(assoc_tab)
+  
+  tibble(
+    Variable_1 = var1,
+    Variable_2 = var2,
+    Chi_Square = unname(chi$statistic),
+    df = unname(chi$parameter),
+    p_value = chi$p.value,
+    Cramers_V = cramer_v(assoc_tab)
+  )
+}
+
+
+asoc_vars <- cat_table(bc_analysis_df,"Regimen","Molecular_Subtype")
 
 
